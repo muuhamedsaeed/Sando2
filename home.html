@@ -58,7 +58,6 @@ initThemeControls();
 
   function shift(n) { const [y, m] = month.value.split("-").map(Number), t = new Date(y, m - 1 + n, 1); month.value = t.getFullYear() + "-" + pad(t.getMonth() + 1); render(); }
   $("prev").onclick = () => shift(-1); $("next").onclick = () => shift(1); month.onchange = render;
-  const pinnedBadge = () => '<span class="pin-badge"><span class="pin-icon" role="img" aria-label="Pinned transaction">📌</span>Pinned</span>';
   const dateLabel = date => new Date(date + "T00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
   const formatMonth = value => new Date(value + "T00:00").toLocaleDateString("en-GB", { month: "long", year: "numeric" });
 
@@ -70,13 +69,13 @@ initThemeControls();
       const isPinned = entry.pinned;
       const date = isPinned ? "Every month" : dateLabel(entry.entry_date);
       const notes = !isPinned && entry.notes && entry.notes.length ? '<div class="entry-notes"><span>Note:</span> ' + entry.notes.map(note => esc(note)).join(" · ") + "</div>" : "";
-      const description = (isPinned ? pinnedBadge() + " " : "") + esc(entry.description) + '<span class="m"> · ' + esc(entry.category) + "</span>" + notes;
+      const description = esc(entry.description) + '<span class="m"> · ' + esc(entry.category) + "</span>" + notes;
       const displayedAmount = Number.isFinite(entry.amount) ? money(entry.amount) : "—";
       const amount = '<span class="amount-wrap"><span>' + displayedAmount + '</span>' + editAmountButton(entry) + '</span>';
       const action = isPinned
         ? '<button class="x" data-pin-del="' + esc(entry.id) + '" aria-label="Delete pinned transaction ' + esc(entry.description) + '">×</button>'
         : '<button class="x" data-del="' + esc(entry.id) + '" aria-label="Delete ' + esc(entry.description) + '">×</button>';
-      return '<tr class="' + (isPinned ? "pinned-row" : "") + '"><td class="c-date">' + date + '</td><td class="c-desc">' + description + '</td><td class="c-cat">' + esc(entry.category) + '</td><td class="r c-amt ' + cls + '">' + amount + '</td><td class="c-x">' + action + "</td></tr>";
+      return '<tr><td class="c-date">' + date + '</td><td class="c-desc">' + description + '</td><td class="c-cat">' + esc(entry.category) + '</td><td class="r c-amt ' + cls + '">' + amount + '</td><td class="c-x">' + action + "</td></tr>";
     }).join("");
     return '<div style="overflow-x:auto"><table class="ledger"><thead><tr><th>Date</th><th>Description</th><th>Category</th><th class="r">Amount (' + esc(S.currency) + ')</th><th></th></tr></thead><tbody>' + rows + '</tbody><tfoot><tr><td colspan="3">Total ' + label.toLowerCase() + '</td><td class="r ' + cls + '">' + money(total) + '</td><td></td></tr></tfoot></table></div>';
   }
