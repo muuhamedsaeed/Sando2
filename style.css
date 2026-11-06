@@ -45,6 +45,9 @@ h1{margin:0 0 6px;font-size:32px;font-weight:800}
 .ledger tfoot td{background:var(--bg);font-weight:800}
 .ledger .x{width:36px;height:36px;border:0;border-radius:50%;background:transparent;color:var(--mut);font-size:18px;cursor:pointer}
 .ledger .x:hover{background:var(--row)}
+.amount-wrap{display:inline-flex;align-items:center;justify-content:flex-end;gap:8px}
+.amount-edit{min-height:30px;padding:0 9px;border:1px solid var(--line);border-radius:7px;background:var(--card);color:var(--grn);font-size:12px;font-weight:800;cursor:pointer}
+.amount-edit:hover{background:var(--row)}
 .ledger .m{display:none}
 .entry-notes{margin-top:4px;color:var(--mut);font-size:12px;font-weight:500;line-height:1.4}.entry-notes span{font-weight:800}
 .pinned-row td{background:var(--tint)}
@@ -74,7 +77,7 @@ h1{margin:0 0 6px;font-size:32px;font-weight:800}
 .row-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}.row-actions .btn{min-height:38px;padding:0 12px}
 .login{display:flex;flex-wrap:wrap;min-height:100vh}.login .brand{flex:1 1 420px;background:var(--login-bg);color:var(--login-ink);padding:64px;display:flex;flex-direction:column;justify-content:space-between;gap:48px}.login .brand h1{font-size:46px;line-height:1.1;margin:0 0 16px}.login .brand p{margin:0;font-size:17px;line-height:1.6;color:var(--login-muted);max-width:420px}.login .form{flex:1 1 420px;display:flex;align-items:center;justify-content:center;padding:48px}.login .card{width:100%;max-width:400px;padding:36px}.login h2{margin:0 0 8px;font-size:26px;font-weight:800}.pw{display:flex;gap:8px;margin-bottom:20px}
 .login-theme{position:fixed;z-index:2;top:18px;right:18px;display:flex;align-items:center;gap:6px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card)}.login-theme .lbl{margin:0}.login-theme .theme-select{min-height:32px}
-dialog{border:1px solid var(--line);border-radius:16px;padding:28px;width:min(420px,92vw);font-family:inherit;color:var(--ink);background:var(--card)}dialog::backdrop{background:var(--backdrop)}dialog h2{margin:0 0 16px;font-size:20px}dialog .f{margin-bottom:14px}
+dialog{border:1px solid var(--line);border-radius:16px;padding:28px;width:min(420px,92vw);font-family:inherit;color:var(--ink);background:var(--card)}dialog::backdrop{background:var(--backdrop)}dialog h2{margin:0 0 16px;font-size:20px}dialog .f{margin-bottom:14px}#amountHelp{margin:-8px 0 16px}
 @media(max-width:640px){
 .hd{padding:12px 16px}.wrap{padding:20px 16px 32px}h1{font-size:24px}.sub{font-size:14px}
 .nv{width:100%;flex-wrap:wrap}.nv a{flex:1;text-align:center;padding:12px 0}.nv .logout{display:none}.theme-picker{margin-left:auto}

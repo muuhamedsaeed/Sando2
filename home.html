@@ -38,6 +38,12 @@
   <div class="f"><label class="lbl" for="dn">Notes <span class="optional">(optional)</span></label><textarea class="inp" id="dn" maxlength="500" placeholder="Add a note about this entry"></textarea></div>
   <div class="acts"><button type="button" class="btn o" id="cancel">Cancel</button><button class="btn">Save entry</button></div>
 </form></dialog>
+<dialog id="amountDlg"><form id="amountForm">
+  <h2 id="amountTitle">Change amount</h2>
+  <p class="sub" id="amountHelp"></p>
+  <div class="f"><label class="lbl" for="amountInput">Amount</label><input class="inp" id="amountInput" type="number" min="0.01" step="0.01" required></div>
+  <div class="acts"><button type="button" class="btn o" id="amountCancel">Cancel</button><button class="btn">Save amount</button></div>
+</form></dialog>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
 <script src="app.js"></script>
@@ -45,7 +51,7 @@
 initThemeControls();
 (async () => {
   const session = await requireLogin(); if (!session) return;
-  let S = { ...DEFAULTS }, type = "income", entries = [], pinned = [], tok = 0;
+  let S = { ...DEFAULTS }, type = "income", entries = [], pinned = [], amountTarget = null, tok = 0;
   const month = $("month"), now = new Date();
   month.value = now.getFullYear() + "-" + pad(now.getMonth() + 1);
   try { S = await loadSettings(); brand(S); $("title").textContent = S.homeTitle; $("desc").textContent = S.homeDesc; } catch (e) { showError(e); }
@@ -54,14 +60,9 @@ initThemeControls();
   $("prev").onclick = () => shift(-1); $("next").onclick = () => shift(1); month.onchange = render;
   const pinnedBadge = () => '<span class="pin-badge"><span class="pin-icon" role="img" aria-label="Pinned transaction">📌</span>Pinned</span>';
   const dateLabel = date => new Date(date + "T00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+  const formatMonth = value => new Date(value + "T00:00").toLocaleDateString("en-GB", { month: "long", year: "numeric" });
 
-  function pinnedAmountControl(entry) {
-    const inputId = "pin-amount-" + entry.id;
-    const saved = Number.isFinite(entry.amount);
-    return '<div class="pin-amount">' + (saved ? "" : '<span class="unset">—</span>') +
-      '<input class="inp mini-inp" id="' + esc(inputId) + '" type="number" min="0.01" step="0.01" value="' + (saved ? entry.amount : "") + '" aria-label="Amount for pinned ' + esc(entry.description) + '">' +
-      '<button class="btn o mini-btn" data-save-pinned-amount="' + esc(entry.id) + '" aria-label="Save amount for pinned ' + esc(entry.description) + '">Save</button></div>';
-  }
+  const editAmountButton = entry => '<button class="amount-edit" data-edit-amount="' + esc(entry.id) + '" aria-label="Edit amount for ' + esc(entry.description) + '">Edit</button>';
   function table(list, cls, label) {
     const total = list.reduce((sum, entry) => sum + (Number(entry.amount) || 0), 0);
     if (!list.length) return '<p class="empty">No ' + label.toLowerCase() + ' recorded for this month. Use the button above to add one.</p>';
@@ -70,8 +71,11 @@ initThemeControls();
       const date = isPinned ? "Every month" : dateLabel(entry.entry_date);
       const notes = !isPinned && entry.notes && entry.notes.length ? '<div class="entry-notes"><span>Note:</span> ' + entry.notes.map(note => esc(note)).join(" · ") + "</div>" : "";
       const description = (isPinned ? pinnedBadge() + " " : "") + esc(entry.description) + '<span class="m"> · ' + esc(entry.category) + "</span>" + notes;
-      const amount = isPinned && !entry.fixed ? pinnedAmountControl(entry) : money(entry.amount);
-      const action = isPinned ? '<span class="pin-managed">Manage in Admin</span>' : '<button class="x" data-del="' + esc(entry.id) + '" aria-label="Delete ' + esc(entry.description) + '">×</button>';
+      const displayedAmount = Number.isFinite(entry.amount) ? money(entry.amount) : "—";
+      const amount = '<span class="amount-wrap"><span>' + displayedAmount + '</span>' + editAmountButton(entry) + '</span>';
+      const action = isPinned
+        ? '<button class="x" data-pin-del="' + esc(entry.id) + '" aria-label="Delete pinned transaction ' + esc(entry.description) + '">×</button>'
+        : '<button class="x" data-del="' + esc(entry.id) + '" aria-label="Delete ' + esc(entry.description) + '">×</button>';
       return '<tr class="' + (isPinned ? "pinned-row" : "") + '"><td class="c-date">' + date + '</td><td class="c-desc">' + description + '</td><td class="c-cat">' + esc(entry.category) + '</td><td class="r c-amt ' + cls + '">' + amount + '</td><td class="c-x">' + action + "</td></tr>";
     }).join("");
     return '<div style="overflow-x:auto"><table class="ledger"><thead><tr><th>Date</th><th>Description</th><th>Category</th><th class="r">Amount (' + esc(S.currency) + ')</th><th></th></tr></thead><tbody>' + rows + '</tbody><tfoot><tr><td colspan="3">Total ' + label.toLowerCase() + '</td><td class="r ' + cls + '">' + money(total) + '</td><td></td></tr></tfoot></table></div>';
@@ -105,7 +109,7 @@ initThemeControls();
     $("carry").textContent = "Carried over from previous months: " + money(carried) + " " + S.currency;
   }
   document.addEventListener("click", async event => {
-    const add = event.target.closest("[data-add]"), remove = event.target.closest("[data-del]"), savePinned = event.target.closest("[data-save-pinned-amount]");
+    const add = event.target.closest("[data-add]"), remove = event.target.closest("[data-del]"), removePinned = event.target.closest("[data-pin-del]"), editAmount = event.target.closest("[data-edit-amount]");
     if (add) {
       type = add.dataset.add; $("dt").textContent = type === "income" ? "Add income" : "Add expense";
       try { const categories = await loadCategories(); $("dc").innerHTML = categories[type].map(category => "<option>" + esc(category.name) + "</option>").join(""); } catch (err) { return showError(err); }
@@ -116,14 +120,41 @@ initThemeControls();
       const { error } = await sb.from("entries").delete().eq("id", remove.dataset.del);
       if (error) showError(error); else render();
     }
-    if (savePinned) {
-      const id = savePinned.dataset.savePinnedAmount, input = $("pin-amount-" + id), amount = Number(input.value);
-      if (!Number.isFinite(amount) || amount <= 0) { $("err").textContent = "Enter an amount greater than zero."; input.focus(); return; }
-      const { error } = await sb.from("pinned_amounts").upsert({ pinned_id: id, month: month.value + "-01", amount }, { onConflict: "pinned_id,month" });
+    if (removePinned) {
+      const item = pinned.find(entry => entry.id === removePinned.dataset.pinDel);
+      if (!item || !confirm("Delete this pinned transaction from every month?")) return;
+      const { error } = await sb.from("pinned_items").delete().eq("id", item.id);
       if (error) showError(error); else render();
+    }
+    if (editAmount) {
+      const entry = entries.find(item => item.id === editAmount.dataset.editAmount) || pinned.find(item => item.id === editAmount.dataset.editAmount);
+      if (!entry) return;
+      amountTarget = { id: entry.id, pinned: Boolean(entry.pinned), fixed: entry.fixed };
+      $("amountTitle").textContent = "Change amount";
+      $("amountHelp").textContent = entry.pinned
+        ? (entry.fixed ? "This will update this pinned transaction in every month." : "This will update this pinned transaction for " + formatMonth(month.value + "-01") + " only.")
+        : "This will update this entry.";
+      $("amountInput").value = Number.isFinite(entry.amount) ? entry.amount : "";
+      $("amountDlg").showModal(); $("amountInput").focus();
     }
   });
   $("cancel").onclick = () => $("dlg").close();
+  $("amountCancel").onclick = () => { amountTarget = null; $("amountDlg").close(); };
+  $("amountForm").onsubmit = async event => {
+    event.preventDefault();
+    const amount = Number($("amountInput").value);
+    if (!amountTarget || !Number.isFinite(amount) || amount <= 0) return;
+    let error;
+    if (!amountTarget.pinned) {
+      ({ error } = await sb.from("entries").update({ amount }).eq("id", amountTarget.id));
+    } else if (amountTarget.fixed) {
+      ({ error } = await sb.from("pinned_items").update({ amount }).eq("id", amountTarget.id));
+    } else {
+      ({ error } = await sb.from("pinned_amounts").upsert({ pinned_id: amountTarget.id, month: month.value + "-01", amount }, { onConflict: "pinned_id,month" }));
+    }
+    if (error) return showError(error);
+    amountTarget = null; $("amountDlg").close(); render();
+  };
   $("df").onsubmit = async event => {
     event.preventDefault();
     const note = $("dn").value.trim();
