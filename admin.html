@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<script>(function(){var p="system";try{var s=localStorage.getItem("sando2-theme");if(["light","dark","system"].indexOf(s)>-1)p=s}catch(e){}var d=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches;document.documentElement.dataset.theme=p==="system"?(d?"dark":"light"):p;document.documentElement.dataset.themePreference=p})()</script>
+<title>sando2 – Admin</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap">
+<link rel="stylesheet" href="style.css"></head>
+<body>
+<header class="hd" id="adminHeader" hidden>
+  <a class="lg" href="home.html"><span class="mk" data-logo>s</span><span data-site>sando2</span></a>
+  <nav class="nv"><a href="home.html">Home</a><a href="admin.html" class="on">Admin</a><label class="theme-picker" for="themeAdmin"><span>Theme</span><select id="themeAdmin" data-theme-select><option value="light">Light</option><option value="dark">Dark</option><option value="system">System</option></select></label><button class="btn o logout" style="min-height:40px">Log out</button></nav>
+</header>
+<main class="wrap" id="adminMain" hidden><div class="admin">
+  <nav class="side" aria-label="Admin sections"><a href="#content">Site content</a><a href="#cats">Categories</a><a href="#pins">Pinned transactions</a><a href="#pass">Login password</a></nav>
+  <div class="main">
+    <div><h1>Admin</h1><p class="sub">Change the text, options, and recurring transactions shown across the website.</p></div>
+    <p class="msg err" id="err" role="alert"></p>
+
+    <form class="card sec" id="content"><h2>Site content</h2>
+      <div class="grid">
+        <div><label class="lbl" for="siteName">Site name</label><input class="inp" id="siteName" required maxlength="30"></div>
+        <div><label class="lbl" for="currency">Currency</label><select class="inp" id="currency"><option value="EGP">EGP – Egyptian pound</option><option value="USD">USD – US dollar</option><option value="EUR">EUR – Euro</option><option value="SAR">SAR – Saudi riyal</option><option value="AED">AED – UAE dirham</option></select></div>
+        <div class="full"><label class="lbl" for="tagline">Tagline</label><input class="inp" id="tagline" maxlength="80"></div>
+        <div class="full"><label class="lbl" for="homeTitle">Home page title</label><input class="inp" id="homeTitle" required maxlength="60"></div>
+        <div class="full"><label class="lbl" for="homeDesc">Home page description</label><textarea class="inp" id="homeDesc" maxlength="160"></textarea></div>
+      </div>
+      <p class="msg" id="m1" role="status"></p>
+      <button class="btn">Save changes</button>
+    </form>
+
+    <section class="card sec" id="cats"><h2>Categories</h2>
+      <div class="grid">
+        <div><div class="lbl">Income categories</div><div class="chips" id="ci"></div>
+          <form class="add" data-type="income"><input class="inp" aria-label="New income category" placeholder="New category" required maxlength="24"><button class="btn o">Add</button></form></div>
+        <div><div class="lbl">Expense categories</div><div class="chips" id="ce"></div>
+          <form class="add" data-type="expense"><input class="inp" aria-label="New expense category" placeholder="New category" required maxlength="24"><button class="btn o">Add</button></form></div>
+      </div>
+    </section>
+
+    <section class="card sec" id="pins"><h2>Pinned transactions</h2><p class="sub section-intro">Pinned items appear in every month from their start month. Leave the amount empty when it changes each month.</p>
+      <form id="pinForm">
+        <div class="grid">
+          <div><label class="lbl" for="pinType">Type</label><select class="inp" id="pinType"><option value="income">Income</option><option value="expense">Expense</option></select></div>
+          <div><label class="lbl" for="pinStart">Start month</label><input class="inp" id="pinStart" type="month" required></div>
+          <div class="full"><label class="lbl" for="pinDescription">Description</label><input class="inp" id="pinDescription" required maxlength="80"></div>
+          <div><label class="lbl" for="pinCategory">Category</label><select class="inp" id="pinCategory" required></select></div>
+          <div><label class="lbl" for="pinAmount">Amount <span class="optional">(optional)</span></label><input class="inp" id="pinAmount" type="number" min="0.01" step="0.01" inputmode="decimal"><p class="help">Leave empty if the amount changes every month.</p></div>
+        </div>
+        <p class="msg" id="pinMsg" role="status"></p>
+        <div class="acts"><button class="btn" id="pinSubmit">Add pinned transaction</button><button type="button" class="btn o" id="cancelPin" hidden>Cancel edit</button></div>
+      </form>
+      <div class="pinned-list" id="pinList"></div>
+    </section>
+
+    <form class="card sec" id="pass"><h2>Login password</h2>
+      <div class="grid">
+        <div><label class="lbl" for="p1">Current password</label><input class="inp" type="password" id="p1" autocomplete="current-password" required></div>
+        <div><label class="lbl" for="p2">New password</label><input class="inp" type="password" id="p2" autocomplete="new-password" minlength="6" required></div>
+        <div><label class="lbl" for="p3">Confirm new password</label><input class="inp" type="password" id="p3" autocomplete="new-password" minlength="6" required></div>
+      </div>
+      <p class="msg" id="m2" role="status"></p>
+      <button class="btn">Change password</button>
+    </form>
+
+  </div>
+</div></main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script>
+initThemeControls();
+(async () => {
+  const session = await requireLogin(); if (!session) return;
+  const F = ["siteName", "currency", "tagline", "homeTitle", "homeDesc"];
+  let categories = { income: [], expense: [] }, pinItems = [], editingPin = null;
+  const say = (element, text, error) => { element.textContent = text; element.className = "msg" + (error ? " err" : ""); };
+  const thisMonth = () => { const now = new Date(); return now.getFullYear() + "-" + pad(now.getMonth() + 1); };
+  const formatMonth = value => new Date(value + "T00:00").toLocaleDateString("en-GB", { month: "short", year: "numeric" });
+
+  async function showAdmin() {
+    $("adminHeader").hidden = false; $("adminMain").hidden = false;
+    try {
+      const settings = await loadSettings(); brand(settings); F.forEach(key => $(key).value = settings[key]);
+      await Promise.all([chips(), loadPinned()]);
+    } catch (error) { showError(error); }
+  }
+  async function chips() {
+    categories = await loadCategories();
+    [["income", "ci", "i"], ["expense", "ce", "e"]].forEach(([type, id, className]) => {
+      $(id).innerHTML = categories[type].map(category => '<span class="chip ' + className + '">' + esc(category.name) + '<button data-cat-id="' + esc(category.id) + '" aria-label="Remove ' + esc(category.name) + '">×</button></span>').join("");
+    });
+    renderPinCategories($("pinType").value, $("pinCategory").value);
+  }
+  function renderPinCategories(type, selected = "") {
+    const values = categories[type] || [];
+    $("pinCategory").innerHTML = values.map(category => '<option value="' + esc(category.name) + '"' + (category.name === selected ? " selected" : "") + '>' + esc(category.name) + "</option>").join("");
+  }
+  async function loadPinned() {
+    const { data, error } = await sb.from("pinned_items").select("id,type,description,category,amount,start_month,active,created_at").order("created_at");
+    if (error) throw error;
+    pinItems = data || []; renderPinned();
+  }
+  function renderPinned() {
+    if (!pinItems.length) { $("pinList").innerHTML = '<p class="empty">No pinned transactions yet.</p>'; return; }
+    $("pinList").innerHTML = pinItems.map(item => {
+      const typeClass = item.type === "income" ? "i" : "e", typeName = item.type === "income" ? "Income" : "Expense";
+      const amount = item.amount === null ? "No fixed amount" : money(Number(item.amount)) + " " + esc($("currency").value || "EGP");
+      const state = item.active ? "Active" : "Paused";
+      return '<article class="pinned-admin ' + (item.active ? "" : "is-paused") + '"><div><div class="pinned-meta"><span class="chip ' + typeClass + '">' + typeName + '</span><span>' + esc(item.category) + '</span><span>' + esc(formatMonth(item.start_month)) + '</span><span>' + state + '</span></div><h3>' + esc(item.description) + '</h3><p>' + amount + '</p></div><div class="row-actions"><button class="btn o" data-pin-edit="' + esc(item.id) + '" aria-label="Edit pinned ' + esc(item.description) + '">Edit</button><button class="btn o" data-pin-toggle="' + esc(item.id) + '" aria-label="' + (item.active ? "Pause" : "Resume") + " pinned " + esc(item.description) + '">' + (item.active ? "Pause" : "Resume") + '</button><button class="btn red" data-pin-delete="' + esc(item.id) + '" aria-label="Delete pinned ' + esc(item.description) + '">Delete</button></div></article>';
+    }).join("");
+  }
+  function resetPinForm() {
+    editingPin = null; $("pinForm").reset(); $("pinType").value = "income"; $("pinStart").value = thisMonth(); renderPinCategories("income");
+    $("pinSubmit").textContent = "Add pinned transaction"; $("cancelPin").hidden = true; $("pinMsg").textContent = "";
+  }
+  function editPin(id) {
+    const item = pinItems.find(pin => pin.id === id); if (!item) return;
+    editingPin = item.id; $("pinType").value = item.type; $("pinDescription").value = item.description; $("pinStart").value = item.start_month.slice(0, 7); $("pinAmount").value = item.amount === null ? "" : item.amount;
+    renderPinCategories(item.type, item.category); $("pinSubmit").textContent = "Save pinned transaction"; $("cancelPin").hidden = false; $("pinDescription").focus();
+  }
+
+  $("content").onsubmit = async event => {
+    event.preventDefault(); const values = {}; F.forEach(key => values[key] = $(key).value.trim());
+    const { error } = await sb.from("settings").upsert({ user_id: session.user.id, site_name: values.siteName, tagline: values.tagline, home_title: values.homeTitle, home_desc: values.homeDesc, currency: values.currency, updated_at: new Date().toISOString() });
+    if (error) return say($("m1"), "Could not save: " + error.message, true);
+    brand(values); say($("m1"), "Changes saved. Open Home to see them."); renderPinned();
+  };
+  document.addEventListener("click", async event => {
+    const categoryButton = event.target.closest("[data-cat-id]"), editButton = event.target.closest("[data-pin-edit]"), toggleButton = event.target.closest("[data-pin-toggle]"), deleteButton = event.target.closest("[data-pin-delete]");
+    if (categoryButton) {
+      const { error } = await sb.from("categories").delete().eq("id", categoryButton.dataset.catId);
+      if (error) showError(error); else chips();
+    }
+    if (editButton) editPin(editButton.dataset.pinEdit);
+    if (toggleButton) {
+      const item = pinItems.find(pin => pin.id === toggleButton.dataset.pinToggle); if (!item) return;
+      const { error } = await sb.from("pinned_items").update({ active: !item.active }).eq("id", item.id);
+      if (error) showError(error); else loadPinned();
+    }
+    if (deleteButton) {
+      const item = pinItems.find(pin => pin.id === deleteButton.dataset.pinDelete); if (!item || !confirm("Delete this pinned transaction?")) return;
+      const { error } = await sb.from("pinned_items").delete().eq("id", item.id);
+      if (error) showError(error); else { if (editingPin === item.id) resetPinForm(); loadPinned(); }
+    }
+  });
+  document.querySelectorAll(".add").forEach(form => form.onsubmit = async event => {
+    event.preventDefault(); const value = form.querySelector("input").value.trim();
+    const { error } = await sb.from("categories").insert({ type: form.dataset.type, name: value });
+    if (error && error.code !== "23505") return showError(error);
+    form.reset(); chips();
+  });
+  $("pinType").onchange = () => renderPinCategories($("pinType").value);
+  $("pinForm").onsubmit = async event => {
+    event.preventDefault(); const rawAmount = $("pinAmount").value.trim(), amount = rawAmount === "" ? null : Number(rawAmount);
+    if (amount !== null && (!Number.isFinite(amount) || amount <= 0)) return say($("pinMsg"), "Enter an amount greater than zero, or leave it empty.", true);
+    const payload = { type: $("pinType").value, description: $("pinDescription").value.trim(), category: $("pinCategory").value, amount, start_month: $("pinStart").value + "-01" };
+    const result = editingPin ? await sb.from("pinned_items").update(payload).eq("id", editingPin) : await sb.from("pinned_items").insert(payload);
+    if (result.error) return say($("pinMsg"), "Could not save: " + result.error.message, true);
+    resetPinForm(); loadPinned();
+  };
+  $("cancelPin").onclick = resetPinForm;
+  $("pass").onsubmit = async event => {
+    event.preventDefault();
+    if ($("p2").value !== $("p3").value) return say($("m2"), "The new passwords do not match.", true);
+    const check = await sb.auth.signInWithPassword({ email: session.user.email, password: $("p1").value });
+    if (check.error) return say($("m2"), "Current password is wrong.", true);
+    const { error } = await sb.auth.updateUser({ password: $("p2").value });
+    if (error) return say($("m2"), "Could not change password: " + error.message, true);
+    event.target.reset(); say($("m2"), "Password changed. Use it next time you sign in.");
+  };
+  resetPinForm();
+  showAdmin();
+})();
+</script>
+</body></html>

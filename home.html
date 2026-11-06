@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<script>(function(){var p="system";try{var s=localStorage.getItem("sando2-theme");if(["light","dark","system"].indexOf(s)>-1)p=s}catch(e){}var d=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches;document.documentElement.dataset.theme=p==="system"?(d?"dark":"light"):p;document.documentElement.dataset.themePreference=p})()</script>
+<title>sando2 – Home</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap">
+<link rel="stylesheet" href="style.css"></head>
+<body>
+<header class="hd">
+  <a class="lg" href="home.html"><span class="mk" data-logo>s</span><span data-site>sando2</span></a>
+  <nav class="nv"><a href="home.html" class="on">Home</a><a href="admin.html">Admin</a><label class="theme-picker" for="themeHome"><span>Theme</span><select id="themeHome" data-theme-select><option value="light">Light</option><option value="dark">Dark</option><option value="system">System</option></select></label><button class="btn o logout" style="min-height:40px">Log out</button></nav>
+</header>
+<main class="wrap">
+  <div class="bar">
+    <div><h1 id="title"></h1><p class="sub" id="desc"></p></div>
+    <div class="mf">
+      <button class="btn o sq" id="prev" aria-label="Previous month">‹</button>
+      <div><label class="lbl" for="month">Month</label><input class="inp" type="month" id="month" style="min-width:190px"></div>
+      <button class="btn o sq" id="next" aria-label="Next month">›</button>
+    </div>
+  </div>
+  <p class="msg err" id="err" role="alert"></p>
+  <div class="sum">
+    <div class="card"><small>Total income</small><b class="inc" id="ti"></b></div>
+    <div class="card"><small>Total expenses</small><b class="exp" id="te"></b></div>
+    <div class="card"><small>Balance</small><b id="tb"></b><small class="carry" id="carry" role="status"></small></div>
+  </div>
+  <div class="panels">
+    <section class="card panel"><div class="ph"><h2 class="inc">Income</h2><button class="btn" data-add="income">+ Add income</button></div><div id="inc"></div></section>
+    <section class="card panel"><div class="ph"><h2 class="exp">Expenses</h2><button class="btn red" data-add="expense">+ Add expense</button></div><div id="exp"></div></section>
+  </div>
+</main>
+<dialog id="dlg"><form id="df">
+  <h2 id="dt"></h2>
+  <div class="f"><label class="lbl" for="dd">Date</label><input class="inp" type="date" id="dd" required></div>
+  <div class="f"><label class="lbl" for="ds">Description</label><input class="inp" id="ds" required maxlength="80"></div>
+  <div class="f"><label class="lbl" for="dc">Category</label><select class="inp" id="dc"></select></div>
+  <div class="f"><label class="lbl" for="da">Amount</label><input class="inp" id="da" type="number" min="0.01" step="0.01" required></div>
+  <div class="f"><label class="lbl" for="dn">Notes <span class="optional">(optional)</span></label><textarea class="inp" id="dn" maxlength="500" placeholder="Add a note about this entry"></textarea></div>
+  <div class="acts"><button type="button" class="btn o" id="cancel">Cancel</button><button class="btn">Save entry</button></div>
+</form></dialog>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script>
+initThemeControls();
+(async () => {
+  const session = await requireLogin(); if (!session) return;
+  let S = { ...DEFAULTS }, type = "income", entries = [], pinned = [], tok = 0;
+  const month = $("month"), now = new Date();
+  month.value = now.getFullYear() + "-" + pad(now.getMonth() + 1);
+  try { S = await loadSettings(); brand(S); $("title").textContent = S.homeTitle; $("desc").textContent = S.homeDesc; } catch (e) { showError(e); }
+
+  function shift(n) { const [y, m] = month.value.split("-").map(Number), t = new Date(y, m - 1 + n, 1); month.value = t.getFullYear() + "-" + pad(t.getMonth() + 1); render(); }
+  $("prev").onclick = () => shift(-1); $("next").onclick = () => shift(1); month.onchange = render;
+  const pinnedBadge = () => '<span class="pin-badge"><span class="pin-icon" role="img" aria-label="Pinned transaction">📌</span>Pinned</span>';
+  const dateLabel = date => new Date(date + "T00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+
+  function pinnedAmountControl(entry) {
+    const inputId = "pin-amount-" + entry.id;
+    const saved = Number.isFinite(entry.amount);
+    return '<div class="pin-amount">' + (saved ? "" : '<span class="unset">—</span>') +
+      '<input class="inp mini-inp" id="' + esc(inputId) + '" type="number" min="0.01" step="0.01" value="' + (saved ? entry.amount : "") + '" aria-label="Amount for pinned ' + esc(entry.description) + '">' +
+      '<button class="btn o mini-btn" data-save-pinned-amount="' + esc(entry.id) + '" aria-label="Save amount for pinned ' + esc(entry.description) + '">Save</button></div>';
+  }
+  function table(list, cls, label) {
+    const total = list.reduce((sum, entry) => sum + (Number(entry.amount) || 0), 0);
+    if (!list.length) return '<p class="empty">No ' + label.toLowerCase() + ' recorded for this month. Use the button above to add one.</p>';
+    const rows = list.map(entry => {
+      const isPinned = entry.pinned;
+      const date = isPinned ? "Every month" : dateLabel(entry.entry_date);
+      const notes = !isPinned && entry.notes && entry.notes.length ? '<div class="entry-notes"><span>Note:</span> ' + entry.notes.map(note => esc(note)).join(" · ") + "</div>" : "";
+      const description = (isPinned ? pinnedBadge() + " " : "") + esc(entry.description) + '<span class="m"> · ' + esc(entry.category) + "</span>" + notes;
+      const amount = isPinned && !entry.fixed ? pinnedAmountControl(entry) : money(entry.amount);
+      const action = isPinned ? '<span class="pin-managed">Manage in Admin</span>' : '<button class="x" data-del="' + esc(entry.id) + '" aria-label="Delete ' + esc(entry.description) + '">×</button>';
+      return '<tr class="' + (isPinned ? "pinned-row" : "") + '"><td class="c-date">' + date + '</td><td class="c-desc">' + description + '</td><td class="c-cat">' + esc(entry.category) + '</td><td class="r c-amt ' + cls + '">' + amount + '</td><td class="c-x">' + action + "</td></tr>";
+    }).join("");
+    return '<div style="overflow-x:auto"><table class="ledger"><thead><tr><th>Date</th><th>Description</th><th>Category</th><th class="r">Amount (' + esc(S.currency) + ')</th><th></th></tr></thead><tbody>' + rows + '</tbody><tfoot><tr><td colspan="3">Total ' + label.toLowerCase() + '</td><td class="r ' + cls + '">' + money(total) + '</td><td></td></tr></tfoot></table></div>';
+  }
+  async function render() {
+    const my = ++tok, [year, monthNumber] = month.value.split("-").map(Number), next = new Date(year, monthNumber, 1);
+    const from = month.value + "-01", to = next.getFullYear() + "-" + pad(next.getMonth() + 1) + "-01";
+    const [entryResult, pinResult, amountResult, balanceResult] = await Promise.all([
+      sb.from("entries").select("id,type,entry_date,description,category,amount,entry_notes(note)").gte("entry_date", from).lt("entry_date", to).order("entry_date"),
+      sb.from("pinned_items").select("id,type,description,category,amount,start_month").eq("active", true).lte("start_month", from).order("created_at"),
+      sb.from("pinned_amounts").select("pinned_id,amount").eq("month", from),
+      sb.rpc("balance_through", { p_month: from })
+    ]);
+    if (my !== tok) return;
+    const problem = entryResult.error || pinResult.error || amountResult.error || balanceResult.error;
+    if (problem) return showError(problem);
+    $("err").textContent = "";
+    entries = (entryResult.data || []).map(entry => ({
+      ...entry,
+      amount: Number(entry.amount),
+      notes: (entry.entry_notes || []).map(note => note.note).filter(Boolean)
+    }));
+    const monthlyAmounts = new Map((amountResult.data || []).map(row => [row.pinned_id, Number(row.amount)]));
+    pinned = (pinResult.data || []).map(item => ({ ...item, pinned: true, fixed: item.amount !== null, amount: item.amount === null ? (monthlyAmounts.has(item.id) ? monthlyAmounts.get(item.id) : null) : Number(item.amount) }));
+    const income = [...pinned.filter(item => item.type === "income"), ...entries.filter(entry => entry.type === "income")];
+    const expense = [...pinned.filter(item => item.type === "expense"), ...entries.filter(entry => entry.type === "expense")];
+    $("inc").innerHTML = table(income, "inc", "Income"); $("exp").innerHTML = table(expense, "exp", "Expenses");
+    const totalIncome = income.reduce((sum, entry) => sum + (Number(entry.amount) || 0), 0), totalExpense = expense.reduce((sum, entry) => sum + (Number(entry.amount) || 0), 0);
+    const balance = Number(balanceResult.data || 0), carried = balance - totalIncome + totalExpense;
+    $("ti").textContent = money(totalIncome) + " " + S.currency; $("te").textContent = money(totalExpense) + " " + S.currency; $("tb").textContent = money(balance) + " " + S.currency;
+    $("carry").textContent = "Carried over from previous months: " + money(carried) + " " + S.currency;
+  }
+  document.addEventListener("click", async event => {
+    const add = event.target.closest("[data-add]"), remove = event.target.closest("[data-del]"), savePinned = event.target.closest("[data-save-pinned-amount]");
+    if (add) {
+      type = add.dataset.add; $("dt").textContent = type === "income" ? "Add income" : "Add expense";
+      try { const categories = await loadCategories(); $("dc").innerHTML = categories[type].map(category => "<option>" + esc(category.name) + "</option>").join(""); } catch (err) { return showError(err); }
+      const today = now.getFullYear() + "-" + pad(now.getMonth() + 1) + "-" + pad(now.getDate());
+      $("dd").value = today.startsWith(month.value) ? today : month.value + "-01"; $("ds").value = ""; $("da").value = ""; $("dn").value = ""; $("dlg").showModal();
+    }
+    if (remove && confirm("Delete this entry?")) {
+      const { error } = await sb.from("entries").delete().eq("id", remove.dataset.del);
+      if (error) showError(error); else render();
+    }
+    if (savePinned) {
+      const id = savePinned.dataset.savePinnedAmount, input = $("pin-amount-" + id), amount = Number(input.value);
+      if (!Number.isFinite(amount) || amount <= 0) { $("err").textContent = "Enter an amount greater than zero."; input.focus(); return; }
+      const { error } = await sb.from("pinned_amounts").upsert({ pinned_id: id, month: month.value + "-01", amount }, { onConflict: "pinned_id,month" });
+      if (error) showError(error); else render();
+    }
+  });
+  $("cancel").onclick = () => $("dlg").close();
+  $("df").onsubmit = async event => {
+    event.preventDefault();
+    const note = $("dn").value.trim();
+    const { data: entry, error } = await sb.from("entries").insert({ type, entry_date: $("dd").value, description: $("ds").value.trim(), category: $("dc").value, amount: parseFloat($("da").value) }).select("id").single();
+    if (error) return showError(error);
+    if (note) {
+      const { error: noteError } = await sb.from("entry_notes").insert({ entry_id: entry.id, note });
+      if (noteError) showError(new Error("Entry saved, but its note could not be saved: " + noteError.message));
+    }
+    $("dlg").close(); month.value = $("dd").value.slice(0, 7); render();
+  };
+  render();
+})();
+</script>
+</body></html>

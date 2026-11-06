@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<script>(function(){var p="system";try{var s=localStorage.getItem("sando2-theme");if(["light","dark","system"].indexOf(s)>-1)p=s}catch(e){}var d=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches;document.documentElement.dataset.theme=p==="system"?(d?"dark":"light"):p;document.documentElement.dataset.themePreference=p})()</script>
+<title>sando2 – Sign in</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap">
+<link rel="stylesheet" href="style.css"></head>
+<body>
+<div class="login-theme"><label class="lbl" for="themeLogin">Theme</label><select class="theme-select" id="themeLogin" data-theme-select aria-label="Theme"><option value="light">Light</option><option value="dark">Dark</option><option value="system">System</option></select></div>
+<main class="login">
+  <section class="brand">
+    <div class="lg"><span class="mk" data-logo>s</span><span data-site>sando2</span></div>
+    <div><h1>Know where your month went.</h1><p>Log everything that comes in and goes out, then review any month side by side.</p></div>
+    <small data-tagline>Monthly income and expense log</small>
+  </section>
+  <section class="form"><div class="card">
+    <h2>Sign in</h2>
+    <p class="sub" style="margin-bottom:24px">Enter the password to open your ledger.</p>
+    <form id="f">
+      <label class="lbl" for="pw">Password</label>
+      <div class="pw"><input id="pw" class="inp" type="password" autocomplete="current-password" required><button type="button" class="btn o" id="show" aria-pressed="false">Show</button></div>
+      <button class="btn" style="width:100%">Open <span data-site>sando2</span></button>
+      <p class="msg err" id="msg" role="alert"></p>
+    </form>
+  </div></section>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script>
+    initThemeControls();
+(async () => {
+  const { data } = await sb.auth.getSession();
+  if (data.session) { location.replace("home.html"); return; }
+})();
+const pw = $("pw"), show = $("show"), msg = $("msg");
+show.onclick = () => { const t = pw.type === "password"; pw.type = t ? "text" : "password"; show.textContent = t ? "Hide" : "Show"; show.setAttribute("aria-pressed", t); };
+$("f").onsubmit = async e => {
+  e.preventDefault(); msg.textContent = "";
+  const btn = e.target.querySelector(".btn:not(.o)"); btn.disabled = true;
+  const { error } = await sb.auth.signInWithPassword({ email: cfg.ownerEmail, password: pw.value });
+  btn.disabled = false;
+  if (error) { msg.textContent = error.status === 400 ? "Wrong password. Try again." : "Could not sign in: " + error.message; pw.select(); }
+  else location.href = "home.html";
+};
+</script>
+</body></html>
